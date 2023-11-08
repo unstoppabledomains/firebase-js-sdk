@@ -602,7 +602,6 @@ export interface ConfirmationResult {
   ): Promise<UserCredential | undefined>;
 
   confirmed(auth: Auth): Promise<UserCredential>;
-
 }
 
 /**

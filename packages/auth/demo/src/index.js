@@ -2315,7 +2315,9 @@ function initApp() {
   );
 
   $('#signin-verify-phone-number').click(onSignInVerifyPhoneNumber);
-  $('#signin-verify-phone-number-webotp').click(onSignInVerifyPhoneNumberWebOTP);
+  $('#signin-verify-phone-number-webotp').click(
+    onSignInVerifyPhoneNumberWebOTP
+  );
   $('#signin-confirm-phone-verification').click(
     onSignInConfirmPhoneVerification
   );

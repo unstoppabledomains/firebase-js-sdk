@@ -71,44 +71,59 @@ class ConfirmationResultImpl implements ConfirmationResult {
     private readonly onConfirmation: OnConfirmationCallback
   ) {}
 
-  // confirmed method that races confirm and confirmWithWebOTP
-  confirmed(auth: Auth): Promise<UserCredential> {
-    // Create a manual confirmation promise that resolves when confirm is called
-    const manualConfirmationPromise: Promise<UserCredential> = new Promise((resolve, reject) => {
-      // Store the original confirm method
-      const originalConfirm = this.confirm.bind(this);
+  private confirmInProgress = false;
+  private confirmResolve: (
+    value: UserCredential | PromiseLike<UserCredential>
+  ) => void = () => {};
+  private confirmReject: (reason: Error) => void = () => {};
 
-      // Override confirm temporarily
-      this.confirm = async (verificationCode: string) => {
-        try {
-          // Call the original confirm method and resolve the promise if successful
-          const result = await originalConfirm(verificationCode);
-          // resolve(result);
-          return result;
-        } catch (error) {
-          // Reject the promise if there's an error
-          // reject(error);
-          throw error;
-        } finally {
-          // Restore the original confirm method
-          this.confirm = originalConfirm;
-        }
-      };
-    });
-
-    // Use Promise.race to create a promise that resolves or rejects as soon as either confirm or confirmWithWebOTP does
-    return Promise.race([
-      manualConfirmationPromise,
-      this.confirmWithWebOTP(auth, 30)
-    ]);
+  // confirm method with minimal changes
+  async confirm(verificationCode: string): Promise<UserCredential> {
+    this.confirmInProgress = true;
+    try {
+      const authCredential = PhoneAuthCredential._fromVerification(
+        this.verificationId,
+        verificationCode
+      );
+      const userCredential = await this.onConfirmation(authCredential);
+      this.confirmResolve(userCredential); // Resolve any waiting confirmed promise
+      return userCredential;
+    } catch (error) {
+      this.confirmReject(error as Error); // Reject any waiting confirmed promise
+      throw error;
+    } finally {
+      this.confirmInProgress = false;
+    }
   }
 
-  async confirm(verificationCode: string): Promise<UserCredential> {
-    const authCredential = PhoneAuthCredential._fromVerification(
-      this.verificationId,
-      verificationCode
-    );
-    return this.onConfirmation(authCredential);
+  // New confirmed method
+  confirmed(auth: Auth): Promise<UserCredential> {
+    // If confirm is already in progress, we return a promise that will be resolved
+    // or rejected by the ongoing confirm operation.
+    if (this.confirmInProgress) {
+      return new Promise<UserCredential>((resolve, reject) => {
+        this.confirmResolve = resolve;
+        this.confirmReject = reject;
+      });
+    } else {
+      // If confirm is not in progress, we race confirmWithWebOTP with a promise
+      // that can be resolved or rejected by a future confirm call.
+      const manualConfirmationPromise = new Promise<UserCredential>(
+        (resolve, reject) => {
+          this.confirmResolve = resolve;
+          this.confirmReject = reject;
+        }
+      );
+
+      // Immediately invoke confirmWithWebOTP to start the WebOTP process
+      const webOTPConfirmationPromise = this.confirmWithWebOTP(auth, 30);
+
+      // Race the manual confirmation promise against the WebOTP confirmation promise
+      return Promise.race([
+        manualConfirmationPromise,
+        webOTPConfirmationPromise
+      ]);
+    }
   }
 
   async confirmWithWebOTP(
@@ -225,18 +240,18 @@ class ConfirmationResultImpl implements ConfirmationResult {
 export async function signInWithPhoneNumber(
   auth: Auth,
   phoneNumber: string,
-  appVerifier: ApplicationVerifier,
+  appVerifier: ApplicationVerifier
 ): Promise<ConfirmationResult> {
   const authInternal = _castAuth(auth);
-    const verificationId = await _verifyPhoneNumber(
-      authInternal,
-      phoneNumber,
-      getModularInstance(appVerifier as ApplicationVerifierInternal),
-    );
-    return new ConfirmationResultImpl(verificationId, cred =>
-      signInWithCredential(authInternal, cred)
-    );
-  }
+  const verificationId = await _verifyPhoneNumber(
+    authInternal,
+    phoneNumber,
+    getModularInstance(appVerifier as ApplicationVerifierInternal)
+  );
+  return new ConfirmationResultImpl(verificationId, cred =>
+    signInWithCredential(authInternal, cred)
+  );
+}
 
 /**
  * Links the user account with the given phone number.
@@ -304,7 +319,7 @@ export async function reauthenticateWithPhoneNumber(
 export async function _verifyPhoneNumber(
   auth: AuthInternal,
   options: PhoneInfoOptions | string,
-  verifier: ApplicationVerifierInternal,
+  verifier: ApplicationVerifierInternal
 ): Promise<string> {
   const recaptchaToken = await verifier.verify();
 
