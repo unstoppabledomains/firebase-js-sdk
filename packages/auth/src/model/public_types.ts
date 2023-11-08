@@ -600,6 +600,9 @@ export interface ConfirmationResult {
     auth: Auth,
     webOTPTimeoutSeconds: number
   ): Promise<UserCredential | undefined>;
+
+  confirmed(auth: Auth): Promise<UserCredential>;
+
 }
 
 /**

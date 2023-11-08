@@ -733,11 +733,11 @@ async function onSignInVerifyPhoneNumberWebOTP() {
   clearApplicationVerifier();
   // Initialize a reCAPTCHA application verifier.
   makeApplicationVerifier('signin-verify-phone-number');
-  await signInWithPhoneNumber(auth, phoneNumber, applicationVerifier, 30).then(
+  await signInWithPhoneNumber(auth, phoneNumber, applicationVerifier).then(
     confirmationResult => {
       window.confirmationResult = confirmationResult;
       confirmationResult
-        .confirmWithWebOTP(auth, 10)
+        .confirmed(auth)
         .then(onAuthUserCredentialSuccess, onAuthError);
     }
   );

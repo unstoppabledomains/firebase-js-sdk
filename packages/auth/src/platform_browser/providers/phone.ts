@@ -155,7 +155,6 @@ export class PhoneAuthProvider {
           getModularInstance(
             applicationVerifier as ApplicationVerifierInternal
           ),
-          webOTPTimeoutSeconds
         );
       } catch (error) {
         throw error;
