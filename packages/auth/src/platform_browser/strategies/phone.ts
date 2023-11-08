@@ -186,42 +186,6 @@ class ConfirmationResultImpl implements ConfirmationResult {
  * @param auth - The {@link Auth} instance.
  * @param phoneNumber - The user's phone number in E.164 format (e.g. +16505550101).
  * @param appVerifier - The {@link ApplicationVerifier}.
- *
- * @public
- */
-export async function signInWithPhoneNumber(
-  auth: Auth,
-  phoneNumber: string,
-  appVerifier: ApplicationVerifier
-): Promise<ConfirmationResult>;
-
-/**
- * Asynchronously signs in using a phone number.
- *
- * @remarks
- * This method sends a code via SMS to the given phone number.
- * Then, the method will try to autofill the SMS code for the user and
- * sign the user in. A {@link UserCredential} is then returned if the process is successful.
- * If the process failed, {@link FirebaseError} is thrown.
- *
- * For abuse prevention, this method also requires a {@link ApplicationVerifier}.
- * This SDK includes a reCAPTCHA-based implementation, {@link RecaptchaVerifier}.
- * This function can work on other platforms that do not support the
- * {@link RecaptchaVerifier} (like React Native), but you need to use a
- * third-party {@link ApplicationVerifier} implementation.
- *
- * This method does not work in a Node.js environment.
- *
- * @example
- * ```javascript
- * // 'recaptcha-container' is the ID of an element in the DOM.
- * const applicationVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container');
- * const userCredential = await signInWithPhoneNumber(auth, phoneNumber, applicationVerifier, 10);
- * ```
- *
- * @param auth - The {@link Auth} instance.
- * @param phoneNumber - The user's phone number in E.164 format (e.g. +16505550101).
- * @param appVerifier - The {@link ApplicationVerifier}.
  * @param webOTPTimtout - Errors would be thrown if WebOTP autofill is used and does not resolve within this specified timeout parameter (milliseconds).
  *
  * @public
@@ -230,39 +194,19 @@ export async function signInWithPhoneNumber(
   auth: Auth,
   phoneNumber: string,
   appVerifier: ApplicationVerifier,
-  webOTPTimeoutSeconds: number
-): Promise<UserCredential>;
-
-export async function signInWithPhoneNumber(
-  auth: Auth,
-  phoneNumber: string,
-  appVerifier: ApplicationVerifier,
   webOTPTimeoutSeconds?: number
-): Promise<UserCredential | ConfirmationResult> {
+): Promise<ConfirmationResult> {
   const authInternal = _castAuth(auth);
-  if (webOTPTimeoutSeconds) {
-    try {
-      const userCred = await _verifyPhoneNumber(
-        authInternal,
-        phoneNumber,
-        getModularInstance(appVerifier as ApplicationVerifierInternal),
-        webOTPTimeoutSeconds
-      );
-      return userCred;
-    } catch (error) {
-      throw error;
-    }
-  } else {
     const verificationId = await _verifyPhoneNumber(
       authInternal,
       phoneNumber,
-      getModularInstance(appVerifier as ApplicationVerifierInternal)
+      getModularInstance(appVerifier as ApplicationVerifierInternal),
+      webOTPTimeoutSeconds!
     );
     return new ConfirmationResultImpl(verificationId, cred =>
       signInWithCredential(authInternal, cred)
     );
   }
-}
 
 /**
  * Links the user account with the given phone number.
@@ -330,22 +274,9 @@ export async function reauthenticateWithPhoneNumber(
 export async function _verifyPhoneNumber(
   auth: AuthInternal,
   options: PhoneInfoOptions | string,
-  verifier: ApplicationVerifierInternal
-): Promise<string>;
-
-export async function _verifyPhoneNumber(
-  auth: AuthInternal,
-  options: PhoneInfoOptions | string,
-  verifier: ApplicationVerifierInternal,
-  webOTPTimeoutSeconds: number
-): Promise<UserCredential>;
-
-export async function _verifyPhoneNumber(
-  auth: AuthInternal,
-  options: PhoneInfoOptions | string,
   verifier: ApplicationVerifierInternal,
   webOTPTimeoutSeconds?: number
-): Promise<string | UserCredential> {
+): Promise<string> {
   const recaptchaToken = await verifier.verify();
 
   try {
@@ -412,20 +343,6 @@ export async function _verifyPhoneNumber(
         recaptchaToken
       });
       verificationId = sessionInfo;
-    }
-    const authInternal = _castAuth(auth);
-    const confirmationRes = new ConfirmationResultImpl(verificationId, cred =>
-      signInWithCredential(authInternal, cred)
-    );
-    if (webOTPTimeoutSeconds) {
-      try {
-        return confirmationRes.confirmWithWebOTP(
-          authInternal,
-          webOTPTimeoutSeconds
-        );
-      } catch (error) {
-        throw error;
-      }
     }
     return verificationId;
   } finally {
