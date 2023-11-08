@@ -22,14 +22,21 @@ import {
   RecaptchaClientType,
   RecaptchaVersion,
   RecaptchaActionName,
-  RecaptchaProvider
+  RecaptchaProvider,
+  EnforcementState
 } from '../../api';
+import { RECAPTCHA_VERIFIER_TYPE } from '../recaptcha/recaptcha_verifier';
 
 import { Auth } from '../../model/public_types';
 import { AuthInternal } from '../../model/auth';
 import { _castAuth } from '../../core/auth/auth_impl';
 import * as jsHelpers from '../load_js';
 import { AuthErrorCode } from '../../core/errors';
+import { StartPhoneMfaEnrollmentRequest } from '../../api/account_management/mfa';
+import { StartPhoneMfaSignInRequest } from '../../api/authentication/mfa';
+import { ApplicationVerifierInternal } from '../../model/application_verifier';
+import { _assert } from '../../core/util/assert';
+
 
 const RECAPTCHA_ENTERPRISE_URL =
   'https://www.google.com/recaptcha/enterprise.js?render=';
@@ -155,16 +162,61 @@ export async function injectRecaptchaFields<T>(
   auth: AuthInternal,
   request: T,
   action: RecaptchaActionName,
-  captchaResp = false
+  captchaResp = false,
+  // fakeToken = false
 ): Promise<T> {
   const verifier = new RecaptchaEnterpriseVerifier(auth);
   let captchaResponse;
-  try {
-    captchaResponse = await verifier.verify(action);
-  } catch (error) {
-    captchaResponse = await verifier.verify(action, true);
-  }
+
+  // if (fakeToken) {
+  //   captchaResponse = FAKE_TOKEN;
+  // } else {
+    try {
+      captchaResponse = await verifier.verify(action);
+    } catch (error) {
+      captchaResponse = await verifier.verify(action, true);
+    }
+  // }
+
   const newRequest = { ...request };
+  if (
+    action === RecaptchaActionName.MFA_ENROLLMENT ||
+    action === RecaptchaActionName.MFA_SIGNIN
+  ) {
+    if ('phoneEnrollmentInfo' in newRequest) {
+      const phoneNumber = (
+        newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      ).phoneEnrollmentInfo.phoneNumber;
+      const recaptchaToken = (
+        newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      ).phoneEnrollmentInfo.recaptchaToken;
+
+      Object.assign(newRequest, {
+        'phoneEnrollmentInfo': {
+          phoneNumber,
+          recaptchaToken,
+          captchaResponse,
+          'clientType': RecaptchaClientType.WEB,
+          'recaptchaVersion': RecaptchaVersion.ENTERPRISE
+        }
+      });
+    } else if ('phoneSignInInfo' in newRequest) {
+      const recaptchaToken = (
+        newRequest as unknown as StartPhoneMfaSignInRequest
+      ).phoneSignInInfo.recaptchaToken;
+
+      Object.assign(newRequest, {
+        'phoneSignInInfo': {
+          recaptchaToken,
+          captchaResponse,
+          'clientType': RecaptchaClientType.WEB,
+          'recaptchaVersion': RecaptchaVersion.ENTERPRISE
+        }
+      });
+    }
+    return newRequest;
+  }
+
   if (!captchaResp) {
     Object.assign(newRequest, { captchaResponse });
   } else {
@@ -177,8 +229,66 @@ export async function injectRecaptchaFields<T>(
   return newRequest;
 }
 
+async function injectRecaptchaV2Token<T>(
+  auth: AuthInternal,
+  request: T,
+  action: RecaptchaActionName,
+  recaptchaV2Token: string
+): Promise<T> {
+  const newRequest = { ...request };
+  if (
+    action === RecaptchaActionName.MFA_ENROLLMENT ||
+    action === RecaptchaActionName.MFA_SIGNIN
+  ) {
+    if ('phoneEnrollmentInfo' in newRequest) {
+      const phoneNumber = (
+        newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      ).phoneEnrollmentInfo.phoneNumber;
+      // const recaptchaToken = (
+      //   newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      // ).phoneEnrollmentInfo.recaptchaToken;
+
+      Object.assign(newRequest, {
+        'phoneEnrollmentInfo': {
+          phoneNumber,
+          recaptchaToken: recaptchaV2Token,
+          // captchaResponse,
+          // 'clientType': RecaptchaClientType.WEB,
+          // 'recaptchaVersion': RecaptchaVersion.ENTERPRISE
+        }
+      });
+    } else if ('phoneSignInInfo' in newRequest) {
+      // const recaptchaToken = (
+      //   newRequest as unknown as StartPhoneMfaSignInRequest
+      // ).phoneSignInInfo.recaptchaToken;
+
+      Object.assign(newRequest, {
+        'phoneSignInInfo': {
+          recaptchaToken: recaptchaV2Token,
+          // captchaResponse,
+          // 'clientType': RecaptchaClientType.WEB,
+          // 'recaptchaVersion': RecaptchaVersion.ENTERPRISE
+        }
+      });
+    }
+    return newRequest;
+  }
+
+  // if (!captchaResp) {
+  //   Object.assign(newRequest, { captchaResponse });
+  // } else {
+  //   Object.assign(newRequest, { 'captchaResp': captchaResponse });
+  // }
+  // Object.assign(newRequest, { 'clientType': RecaptchaClientType.WEB });
+  // Object.assign(newRequest, {
+  //   'recaptchaVersion': RecaptchaVersion.ENTERPRISE
+  // });
+  Object.assign(newRequest, { 'recaptchaToken': recaptchaV2Token });
+  return newRequest;
+}
+
 type ActionMethod<TRequest, TResponse> = (
-  auth: Auth,
+  auth: AuthInternal,
   request: TRequest
 ) => Promise<TResponse>;
 
@@ -186,37 +296,167 @@ export async function handleRecaptchaFlow<TRequest, TResponse>(
   authInstance: AuthInternal,
   request: TRequest,
   actionName: RecaptchaActionName,
-  actionMethod: ActionMethod<TRequest, TResponse>
+  actionMethod: ActionMethod<TRequest, TResponse>,
+  recaptchaProvider: RecaptchaProvider,
+  recaptchaV2Verifier?: ApplicationVerifierInternal
 ): Promise<TResponse> {
-  if (
-    authInstance
-      ._getRecaptchaConfig()
-      ?.isProviderEnabled(RecaptchaProvider.EMAIL_PASSWORD_PROVIDER)
-  ) {
-    const requestWithRecaptcha = await injectRecaptchaFields(
-      authInstance,
-      request,
-      actionName,
-      actionName === RecaptchaActionName.GET_OOB_CODE
-    );
-    return actionMethod(authInstance, requestWithRecaptcha);
+  console.log('handleRecaptchaFlow empty1 ');
+  if (recaptchaProvider === RecaptchaProvider.EMAIL_PASSWORD_PROVIDER) {
+    console.log('empty1 handleRecaptchaFlow - in EMAIL_PASSWORD_PROVIDER if ');
+    if (
+      authInstance
+        ._getRecaptchaConfig()
+        ?.isProviderEnabled(RecaptchaProvider.EMAIL_PASSWORD_PROVIDER)
+    ) {
+      const requestWithRecaptcha = await injectRecaptchaFields(
+        authInstance,
+        request,
+        actionName,
+        actionName === RecaptchaActionName.GET_OOB_CODE
+      );
+      return actionMethod(authInstance, requestWithRecaptcha);
+    } else {
+      return actionMethod(authInstance, request).catch(async error => {
+        if (error.code === `auth/${AuthErrorCode.MISSING_RECAPTCHA_TOKEN}`) {
+          console.log(
+            `${actionName} is protected by reCAPTCHA Enterprise for this project. Automatically triggering the reCAPTCHA flow and restarting the flow.`
+          );
+          const requestWithRecaptcha = await injectRecaptchaFields(
+            authInstance,
+            request,
+            actionName,
+            actionName === RecaptchaActionName.GET_OOB_CODE
+          );
+          return actionMethod(authInstance, requestWithRecaptcha);
+        } else {
+          return Promise.reject(error);
+        }
+      });
+    }
+  } else if (recaptchaProvider === RecaptchaProvider.PHONE_PROVIDER) {
+    console.log('empty1 handleRecaptchaFlow - in phone if');
+    if (
+      authInstance
+        ._getRecaptchaConfig()
+        ?.isProviderEnabled(RecaptchaProvider.PHONE_PROVIDER)
+    ) {
+      console.log('empty1  handleRecaptchaFlow - when phone enable');
+      const requestWithRecaptcha = await injectRecaptchaFields(
+        authInstance,
+        request,
+        actionName,
+        false
+      );
+      console.log('empty1  handleRecaptchaFlow - returning: ', actionMethod);
+      console.log(
+        'empty1  handleRecaptchaFlow - returning actionmethod with requestWithRecaptcha request: ',
+        requestWithRecaptcha
+      );
+
+      return actionMethod(authInstance, requestWithRecaptcha).catch(
+        async error => {
+          // AUDIT flow
+          if (
+            authInstance
+              ._getRecaptchaConfig()
+              ?.getProviderEnforcementState(
+                RecaptchaProvider.PHONE_PROVIDER
+              ) === EnforcementState.AUDIT
+          ) {
+            console.log('handleRecaptchaFlow - phone fails and AUDIT flow');
+            if (
+              error.code === `auth/${AuthErrorCode.MISSING_RECAPTCHA_TOKEN}` ||
+              error.code === `auth/${AuthErrorCode.INVALID_APP_CREDENTIAL}`
+            ) {
+              console.log(
+                'handleRecaptchaFlow - missing recap token or invalid app cred errors'
+              );
+              // fallback to recaptcha v2
+              // const requestWithRecaptchaV2 = await injectRecaptchaFields(
+              //   authInstance,
+              //   request,
+              //   actionName,
+              //   false,
+              //   true // fakeToken
+              // );
+              console.log('recaptchaV2Verifier: ', recaptchaV2Verifier);
+              _assert(
+                recaptchaV2Verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+                authInstance,
+                AuthErrorCode.ARGUMENT_ERROR
+              );
+
+              const recaptchaV2Token = await recaptchaV2Verifier?.verify();
+  
+              _assert(
+                typeof recaptchaV2Token === 'string',
+                authInstance,
+                AuthErrorCode.ARGUMENT_ERROR
+              );
+
+              const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+                authInstance,
+                request,
+                actionName,
+                recaptchaV2Token
+              )
+              
+              console.log(
+                'handleRecaptchaFlow - returning actionmethod with recaptchav2 request: ',
+                requestWithRecaptchaV2
+              );
+              return actionMethod(authInstance, requestWithRecaptchaV2);
+            }
+          }
+          console.log('handleRecaptchaFlow - not AUDIT error out');
+          return Promise.reject(error);
+        }
+      );
+    } else {
+      console.log('handleRecaptchaFlow - phone not enable. Do rcv2 flow.');
+      // recaptcha v2
+      // const requestWithRecaptchaV2 = await injectRecaptchaFields(
+      //   authInstance,
+      //   request,
+      //   actionName,
+      //   false,
+      //   true // fakeToken
+      // );
+      // return actionMethod(authInstance, request);
+      console.log('recaptchaV2Verifier: ', recaptchaV2Verifier);
+
+      _assert(
+        recaptchaV2Verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+        authInstance,
+        AuthErrorCode.ARGUMENT_ERROR
+      );
+
+      console.log('Calling recaptchaV2Verifier.verify() ');
+      const recaptchaV2Token = await recaptchaV2Verifier?.verify();
+  
+              _assert(
+                typeof recaptchaV2Token === 'string',
+                authInstance,
+                AuthErrorCode.ARGUMENT_ERROR
+              );
+              
+
+              const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+                authInstance,
+                request,
+                actionName,
+                recaptchaV2Token
+              )
+              
+              console.log(
+                'handleRecaptchaFlow - returning actionmethod with recaptchav2 request: ',
+                requestWithRecaptchaV2
+              );
+              return actionMethod(authInstance, requestWithRecaptchaV2);
+    }
   } else {
-    return actionMethod(authInstance, request).catch(async error => {
-      if (error.code === `auth/${AuthErrorCode.MISSING_RECAPTCHA_TOKEN}`) {
-        console.log(
-          `${actionName} is protected by reCAPTCHA Enterprise for this project. Automatically triggering the reCAPTCHA flow and restarting the flow.`
-        );
-        const requestWithRecaptcha = await injectRecaptchaFields(
-          authInstance,
-          request,
-          actionName,
-          actionName === RecaptchaActionName.GET_OOB_CODE
-        );
-        return actionMethod(authInstance, requestWithRecaptcha);
-      } else {
-        return Promise.reject(error);
-      }
-    });
+    console.log('handleRecaptchaFlow - neither EMAIL or PHONE provider');
+    return Promise.reject(recaptchaProvider + ' provider is not supported.');
   }
 }
 
@@ -235,7 +475,10 @@ export async function _initializeRecaptchaConfig(auth: Auth): Promise<void> {
     authInternal._tenantRecaptchaConfigs[authInternal.tenantId] = config;
   }
 
-  if (config.isProviderEnabled(RecaptchaProvider.EMAIL_PASSWORD_PROVIDER)) {
+  if (
+    config.isProviderEnabled(RecaptchaProvider.EMAIL_PASSWORD_PROVIDER) ||
+    config.isProviderEnabled(RecaptchaProvider.PHONE_PROVIDER)
+  ) {
     const verifier = new RecaptchaEnterpriseVerifier(authInternal);
     void verifier.verify();
   }

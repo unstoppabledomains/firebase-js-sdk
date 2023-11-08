@@ -720,6 +720,7 @@ function onSignInVerifyPhoneNumber() {
   // Initialize a reCAPTCHA application verifier.
   makeApplicationVerifier('signin-verify-phone-number');
   provider.verifyPhoneNumber(phoneNumber, applicationVerifier).then(
+    // provider.verifyPhoneNumber(phoneNumber, null).then(
     verificationId => {
       clearApplicationVerifier();
       $('#signin-phone-verification-id').val(verificationId);
@@ -757,6 +758,7 @@ function onLinkReauthVerifyPhoneNumber() {
   // Initialize a reCAPTCHA application verifier.
   makeApplicationVerifier('link-reauth-verify-phone-number');
   provider.verifyPhoneNumber(phoneNumber, applicationVerifier).then(
+    // provider.verifyPhoneNumber(phoneNumber, null).then(
     verificationId => {
       clearApplicationVerifier();
       $('#link-reauth-phone-verification-id').val(verificationId);
@@ -843,6 +845,7 @@ function onStartEnrollWithPhoneMultiFactor() {
         'session': multiFactorSession
       };
       return provider.verifyPhoneNumber(phoneInfoOptions, applicationVerifier);
+      // return provider.verifyPhoneNumber(phoneInfoOptions, null);
     })
     .then(
       verificationId => {
@@ -1442,6 +1445,7 @@ function onStartSignInWithPhoneMultiFactor(event) {
     session: multiFactorErrorResolver.session
   };
   provider.verifyPhoneNumber(signInRequest, applicationVerifier).then(
+    // provider.verifyPhoneNumber(signInRequest, null).then(
     verificationId => {
       clearApplicationVerifier();
       $('#multi-factor-sign-in-verification-id').val(verificationId);
