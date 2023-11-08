@@ -279,7 +279,6 @@ export async function _verifyPhoneNumber(
   options: PhoneInfoOptions | string,
   verifier?: ApplicationVerifierInternal
 ): Promise<string> {
-  console.log('empty1 _verifyPhoneNumber');
   const enterpriseVerifier = new RecaptchaEnterpriseVerifier(auth);
   const recaptchaEnterpriseToken = await enterpriseVerifier.verify('verify');
 
@@ -294,29 +293,18 @@ export async function _verifyPhoneNumber(
     AuthErrorCode.ARGUMENT_ERROR
   );
 
-  // let recaptchaV2Token;
-  // console.log('calling v2verifier: ', !auth
-  // ._getRecaptchaConfig()
-  // ?.isProviderEnabled(RecaptchaProvider.EMAIL_PASSWORD_PROVIDER))
-  // if (
-  //   !auth
-  //     ._getRecaptchaConfig()
-  //     ?.isProviderEnabled(RecaptchaProvider.EMAIL_PASSWORD_PROVIDER)
-  // ) {
-  //    recaptchaV2Token = await verifier.verify();
-  
-  //     _assert(
-  //       typeof recaptchaV2Token === 'string',
-  //       auth,
-  //       AuthErrorCode.ARGUMENT_ERROR
-  //     );
-  //     _assert(
-  //       verifier.type === RECAPTCHA_VERIFIER_TYPE,
-  //       auth,
-  //       AuthErrorCode.ARGUMENT_ERROR
-  //     );
-  // }
+  const recaptchaV2Token = await verifier?.verify();
   try {
+    _assert(
+      typeof recaptchaV2Token === 'string',
+      auth,
+      AuthErrorCode.ARGUMENT_ERROR
+    );
+    _assert(
+      verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+      auth,
+      AuthErrorCode.ARGUMENT_ERROR
+    );
     let phoneInfoOptions: PhoneInfoOptions;
 
     if (typeof options === 'string') {
@@ -326,9 +314,6 @@ export async function _verifyPhoneNumber(
     } else {
       phoneInfoOptions = options;
     }
-
-    // rcE is enabled
-    // if (recaptchaConfig?.isProviderEnabled(RecaptchaProvider.PHONE_PROVIDER)) {
 
     // MFA action
     if ('session' in phoneInfoOptions) {
@@ -347,6 +332,7 @@ export async function _verifyPhoneNumber(
           idToken: session.credential,
           phoneEnrollmentInfo: {
             phoneNumber: phoneInfoOptions.phoneNumber,
+            recaptchaToken: recaptchaV2Token
           }
         };
         const startEnrollPhoneMfaResponse: Promise<StartPhoneMfaEnrollmentResponse> =
@@ -356,7 +342,7 @@ export async function _verifyPhoneNumber(
             RecaptchaActionName.MFA_ENROLLMENT,
             startEnrollPhoneMfa,
             RecaptchaProvider.PHONE_PROVIDER,
-            verifier
+            // verifier
           );
 
         const response = await startEnrollPhoneMfaResponse.catch(error => {
@@ -382,7 +368,7 @@ export async function _verifyPhoneNumber(
           mfaPendingCredential: session.credential,
           mfaEnrollmentId,
           phoneSignInInfo: {
-            // recaptchaToken: recaptchaV2Token
+            recaptchaToken: recaptchaV2Token
           }
         };
         const startSignInPhoneMfaResponse: Promise<StartPhoneMfaSignInResponse> =
@@ -392,7 +378,7 @@ export async function _verifyPhoneNumber(
             RecaptchaActionName.MFA_SIGNIN,
             startSignInPhoneMfa,
             RecaptchaProvider.PHONE_PROVIDER,
-            verifier
+            // verifier
           );
 
         const response = await startSignInPhoneMfaResponse.catch(error => {
@@ -408,7 +394,7 @@ export async function _verifyPhoneNumber(
       const sendPhoneVerificationCodeRequest: SendPhoneVerificationCodeRequest =
         {
           phoneNumber: phoneInfoOptions.phoneNumber,
-          // recaptchaToken: recaptchaV2Token
+          recaptchaToken: recaptchaV2Token
         };
       const sendPhoneVerificationCodeResponse: Promise<SendPhoneVerificationCodeResponse> =
         handleRecaptchaFlow(
@@ -417,7 +403,7 @@ export async function _verifyPhoneNumber(
           RecaptchaActionName.SEND_VERIFICATION_CODE,
           sendPhoneVerificationCode,
           RecaptchaProvider.PHONE_PROVIDER,
-          verifier
+          // verifier
         );
 
       const response = await sendPhoneVerificationCodeResponse.catch(error => {

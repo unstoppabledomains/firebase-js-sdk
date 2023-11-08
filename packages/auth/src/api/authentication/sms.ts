@@ -46,7 +46,7 @@ export interface SendPhoneVerificationCodeResponse {
 
 export async function sendPhoneVerificationCode(
   auth: Auth,
-  request: SendPhoneVerificationCodeRequest
+  request: SendPhoneVerificationCodeRequest,
 ): Promise<SendPhoneVerificationCodeResponse> {
   return _performApiRequest<
     SendPhoneVerificationCodeRequest,

@@ -163,20 +163,20 @@ export async function injectRecaptchaFields<T>(
   request: T,
   action: RecaptchaActionName,
   captchaResp = false,
-  // fakeToken = false
+  fakeToken = false
 ): Promise<T> {
   const verifier = new RecaptchaEnterpriseVerifier(auth);
   let captchaResponse;
 
-  // if (fakeToken) {
-  //   captchaResponse = FAKE_TOKEN;
-  // } else {
+  if (fakeToken) {
+    captchaResponse = FAKE_TOKEN;
+  } else {
     try {
       captchaResponse = await verifier.verify(action);
     } catch (error) {
       captchaResponse = await verifier.verify(action, true);
     }
-  // }
+  }
 
   const newRequest = { ...request };
   if (
@@ -244,45 +244,22 @@ async function injectRecaptchaV2Token<T>(
       const phoneNumber = (
         newRequest as unknown as StartPhoneMfaEnrollmentRequest
       ).phoneEnrollmentInfo.phoneNumber;
-      // const recaptchaToken = (
-      //   newRequest as unknown as StartPhoneMfaEnrollmentRequest
-      // ).phoneEnrollmentInfo.recaptchaToken;
 
       Object.assign(newRequest, {
         'phoneEnrollmentInfo': {
           phoneNumber,
           recaptchaToken: recaptchaV2Token,
-          // captchaResponse,
-          // 'clientType': RecaptchaClientType.WEB,
-          // 'recaptchaVersion': RecaptchaVersion.ENTERPRISE
         }
       });
     } else if ('phoneSignInInfo' in newRequest) {
-      // const recaptchaToken = (
-      //   newRequest as unknown as StartPhoneMfaSignInRequest
-      // ).phoneSignInInfo.recaptchaToken;
-
       Object.assign(newRequest, {
         'phoneSignInInfo': {
           recaptchaToken: recaptchaV2Token,
-          // captchaResponse,
-          // 'clientType': RecaptchaClientType.WEB,
-          // 'recaptchaVersion': RecaptchaVersion.ENTERPRISE
         }
       });
     }
     return newRequest;
   }
-
-  // if (!captchaResp) {
-  //   Object.assign(newRequest, { captchaResponse });
-  // } else {
-  //   Object.assign(newRequest, { 'captchaResp': captchaResponse });
-  // }
-  // Object.assign(newRequest, { 'clientType': RecaptchaClientType.WEB });
-  // Object.assign(newRequest, {
-  //   'recaptchaVersion': RecaptchaVersion.ENTERPRISE
-  // });
   Object.assign(newRequest, { 'recaptchaToken': recaptchaV2Token });
   return newRequest;
 }
@@ -298,11 +275,10 @@ export async function handleRecaptchaFlow<TRequest, TResponse>(
   actionName: RecaptchaActionName,
   actionMethod: ActionMethod<TRequest, TResponse>,
   recaptchaProvider: RecaptchaProvider,
-  recaptchaV2Verifier?: ApplicationVerifierInternal
+  // recaptchaV2Verifier?: ApplicationVerifierInternal
 ): Promise<TResponse> {
-  console.log('handleRecaptchaFlow empty1 ');
   if (recaptchaProvider === RecaptchaProvider.EMAIL_PASSWORD_PROVIDER) {
-    console.log('empty1 handleRecaptchaFlow - in EMAIL_PASSWORD_PROVIDER if ');
+    console.log('handleRecaptchaFlow - EMAIL_PASSWORD_PROVIDER flow');
     if (
       authInstance
         ._getRecaptchaConfig()
@@ -334,22 +310,22 @@ export async function handleRecaptchaFlow<TRequest, TResponse>(
       });
     }
   } else if (recaptchaProvider === RecaptchaProvider.PHONE_PROVIDER) {
-    console.log('empty1 handleRecaptchaFlow - in phone if');
+    console.log('handleRecaptchaFlow - PHONE_PROVIDER flow');
     if (
       authInstance
         ._getRecaptchaConfig()
         ?.isProviderEnabled(RecaptchaProvider.PHONE_PROVIDER)
     ) {
-      console.log('empty1  handleRecaptchaFlow - when phone enable');
+      console.log('handleRecaptchaFlow - when phone is enabled');
       const requestWithRecaptcha = await injectRecaptchaFields(
         authInstance,
         request,
         actionName,
         false
       );
-      console.log('empty1  handleRecaptchaFlow - returning: ', actionMethod);
+      console.log(' handleRecaptchaFlow - returning: ', actionMethod);
       console.log(
-        'empty1  handleRecaptchaFlow - returning actionmethod with requestWithRecaptcha request: ',
+        'handleRecaptchaFlow - returning actionmethod with requestWithRecaptcha request: ',
         requestWithRecaptcha
       );
 
@@ -363,49 +339,52 @@ export async function handleRecaptchaFlow<TRequest, TResponse>(
                 RecaptchaProvider.PHONE_PROVIDER
               ) === EnforcementState.AUDIT
           ) {
-            console.log('handleRecaptchaFlow - phone fails and AUDIT flow');
+            console.log('handleRecaptchaFlow - phone fails and its in AUDIT mode');
             if (
               error.code === `auth/${AuthErrorCode.MISSING_RECAPTCHA_TOKEN}` ||
               error.code === `auth/${AuthErrorCode.INVALID_APP_CREDENTIAL}`
             ) {
               console.log(
-                'handleRecaptchaFlow - missing recap token or invalid app cred errors'
+                'handleRecaptchaFlow - missing rCE token or invalid app cred errors'
               );
               // fallback to recaptcha v2
-              // const requestWithRecaptchaV2 = await injectRecaptchaFields(
-              //   authInstance,
-              //   request,
-              //   actionName,
-              //   false,
-              //   true // fakeToken
-              // );
-              console.log('recaptchaV2Verifier: ', recaptchaV2Verifier);
-              _assert(
-                recaptchaV2Verifier?.type === RECAPTCHA_VERIFIER_TYPE,
-                authInstance,
-                AuthErrorCode.ARGUMENT_ERROR
-              );
-
-              const recaptchaV2Token = await recaptchaV2Verifier?.verify();
-  
-              _assert(
-                typeof recaptchaV2Token === 'string',
-                authInstance,
-                AuthErrorCode.ARGUMENT_ERROR
-              );
-
-              const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+              const requestWithRecaptchaV2 = await injectRecaptchaFields(
                 authInstance,
                 request,
                 actionName,
-                recaptchaV2Token
-              )
-              
-              console.log(
-                'handleRecaptchaFlow - returning actionmethod with recaptchav2 request: ',
-                requestWithRecaptchaV2
+                false,
+                true // fakeToken
               );
               return actionMethod(authInstance, requestWithRecaptchaV2);
+
+              // ********** Fetch v2 token in handleRecaptchaFlow approach ******************
+              // console.log('recaptchaV2Verifier: ', recaptchaV2Verifier);
+              // _assert(
+              //   recaptchaV2Verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+              //   authInstance,
+              //   AuthErrorCode.ARGUMENT_ERROR
+              // );
+
+              // const recaptchaV2Token = await recaptchaV2Verifier?.verify();
+  
+              // _assert(
+              //   typeof recaptchaV2Token === 'string',
+              //   authInstance,
+              //   AuthErrorCode.ARGUMENT_ERROR
+              // );
+
+              // const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+              //   authInstance,
+              //   request,
+              //   actionName,
+              //   recaptchaV2Token
+              // );
+              
+              // console.log(
+              //   'handleRecaptchaFlow - returning actionmethod with recaptchav2 request: ',
+              //   requestWithRecaptchaV2
+              // );
+              // return actionMethod(authInstance, requestWithRecaptchaV2);
             }
           }
           console.log('handleRecaptchaFlow - not AUDIT error out');
@@ -415,44 +394,46 @@ export async function handleRecaptchaFlow<TRequest, TResponse>(
     } else {
       console.log('handleRecaptchaFlow - phone not enable. Do rcv2 flow.');
       // recaptcha v2
-      // const requestWithRecaptchaV2 = await injectRecaptchaFields(
-      //   authInstance,
-      //   request,
-      //   actionName,
-      //   false,
-      //   true // fakeToken
-      // );
-      // return actionMethod(authInstance, request);
-      console.log('recaptchaV2Verifier: ', recaptchaV2Verifier);
-
-      _assert(
-        recaptchaV2Verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+      const requestWithRecaptchaV2 = await injectRecaptchaFields(
         authInstance,
-        AuthErrorCode.ARGUMENT_ERROR
+        request,
+        actionName,
+        false,
+        true // fakeToken
       );
+      return actionMethod(authInstance, request);
 
-      console.log('Calling recaptchaV2Verifier.verify() ');
-      const recaptchaV2Token = await recaptchaV2Verifier?.verify();
+      // ********** Fetch v2 token in handleRecaptchaFlow approach ******************
+      // console.log('recaptchaV2Verifier: ', recaptchaV2Verifier);
+
+      // _assert(
+      //   recaptchaV2Verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+      //   authInstance,
+      //   AuthErrorCode.ARGUMENT_ERROR
+      // );
+
+      // console.log('Calling recaptchaV2Verifier.verify() ');
+      // const recaptchaV2Token = await recaptchaV2Verifier?.verify();
   
-              _assert(
-                typeof recaptchaV2Token === 'string',
-                authInstance,
-                AuthErrorCode.ARGUMENT_ERROR
-              );
+      //         _assert(
+      //           typeof recaptchaV2Token === 'string',
+      //           authInstance,
+      //           AuthErrorCode.ARGUMENT_ERROR
+      //         );
               
 
-              const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
-                authInstance,
-                request,
-                actionName,
-                recaptchaV2Token
-              )
+      //         const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+      //           authInstance,
+      //           request,
+      //           actionName,
+      //           recaptchaV2Token
+      //         )
               
-              console.log(
-                'handleRecaptchaFlow - returning actionmethod with recaptchav2 request: ',
-                requestWithRecaptchaV2
-              );
-              return actionMethod(authInstance, requestWithRecaptchaV2);
+      //         console.log(
+      //           'handleRecaptchaFlow - returning actionmethod with recaptchav2 request: ',
+      //           requestWithRecaptchaV2
+      //         );
+      //         return actionMethod(authInstance, requestWithRecaptchaV2);
     }
   } else {
     console.log('handleRecaptchaFlow - neither EMAIL or PHONE provider');
