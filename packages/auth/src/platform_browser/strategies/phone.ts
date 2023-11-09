@@ -193,6 +193,11 @@ export async function reauthenticateWithPhoneNumber(
   );
 }
 
+type PhoneApiCaller<TRequest, TResponse> = (
+  auth: AuthInternal,
+  request: TRequest
+) => Promise<TResponse>;
+
 /**
  * Returns a verification ID to be used in conjunction with the SMS code that is sent.
  *
@@ -216,18 +221,7 @@ export async function _verifyPhoneNumber(
     AuthErrorCode.ARGUMENT_ERROR
   );
 
-  const recaptchaV2Token = await verifier?.verify();
   try {
-    _assert(
-      typeof recaptchaV2Token === 'string',
-      auth,
-      AuthErrorCode.ARGUMENT_ERROR
-    );
-    _assert(
-      verifier?.type === RECAPTCHA_VERIFIER_TYPE,
-      auth,
-      AuthErrorCode.ARGUMENT_ERROR
-    );
     let phoneInfoOptions: PhoneInfoOptions;
 
     if (typeof options === 'string') {
@@ -254,17 +248,48 @@ export async function _verifyPhoneNumber(
         const startPhoneMfaEnrollmentRequest: StartPhoneMfaEnrollmentRequest = {
           idToken: session.credential,
           phoneEnrollmentInfo: {
-            phoneNumber: phoneInfoOptions.phoneNumber,
-            recaptchaToken: recaptchaV2Token
+            phoneNumber: phoneInfoOptions.phoneNumber
           }
         };
+
+        const startEnrollPhoneMfaActionCallback: PhoneApiCaller<
+          StartPhoneMfaEnrollmentRequest,
+          StartPhoneMfaEnrollmentResponse
+        > = async (
+          authParam: AuthInternal,
+          requestParam: StartPhoneMfaEnrollmentRequest
+        ) => {
+          // If rCE token is empty or "NO_RECAPTCHA", fetch v2 token and inject into request
+          if (
+            !requestParam.phoneEnrollmentInfo.captchaResponse ||
+            requestParam.phoneEnrollmentInfo.captchaResponse.length === 0 ||
+            requestParam.phoneEnrollmentInfo.captchaResponse === FAKE_TOKEN
+          ) {
+            _assert(
+              verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+              authParam,
+              AuthErrorCode.ARGUMENT_ERROR
+            );
+
+            const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+              authParam,
+              requestParam,
+              RecaptchaActionName.MFA_ENROLLMENT,
+              verifier
+            );
+            return startEnrollPhoneMfa(authParam, requestWithRecaptchaV2);
+          }
+
+          return startEnrollPhoneMfa(authParam, requestParam);
+        };
+
         const startEnrollPhoneMfaResponse: Promise<StartPhoneMfaEnrollmentResponse> =
           handleRecaptchaFlow(
             auth,
             startPhoneMfaEnrollmentRequest,
             RecaptchaActionName.MFA_ENROLLMENT,
-            startEnrollPhoneMfa,
-            RecaptchaProvider.PHONE_PROVIDER,
+            startEnrollPhoneMfaActionCallback,
+            RecaptchaProvider.PHONE_PROVIDER
           );
 
         const response = await startEnrollPhoneMfaResponse.catch(error => {
@@ -289,17 +314,47 @@ export async function _verifyPhoneNumber(
         const startPhoneMfaSignInRequest: StartPhoneMfaSignInRequest = {
           mfaPendingCredential: session.credential,
           mfaEnrollmentId,
-          phoneSignInInfo: {
-            recaptchaToken: recaptchaV2Token
-          }
+          phoneSignInInfo: {}
         };
+
+        const startSignInPhoneMfaActionCallback: PhoneApiCaller<
+          StartPhoneMfaSignInRequest,
+          StartPhoneMfaSignInResponse
+        > = async (
+          authParam: AuthInternal,
+          requestParam: StartPhoneMfaSignInRequest
+        ) => {
+          // If rCE token is empty or "NO_RECAPTCHA", fetch v2 token and inject into request
+          if (
+            !requestParam.phoneSignInInfo.captchaResponse ||
+            requestParam.phoneSignInInfo.captchaResponse.length === 0 ||
+            requestParam.phoneSignInInfo.captchaResponse === FAKE_TOKEN
+          ) {
+            _assert(
+              verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+              authParam,
+              AuthErrorCode.ARGUMENT_ERROR
+            );
+
+            const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+              authParam,
+              requestParam,
+              RecaptchaActionName.MFA_SIGNIN,
+              verifier
+            );
+            return startSignInPhoneMfa(authParam, requestWithRecaptchaV2);
+          }
+
+          return startSignInPhoneMfa(authParam, requestParam);
+        };
+
         const startSignInPhoneMfaResponse: Promise<StartPhoneMfaSignInResponse> =
           handleRecaptchaFlow(
             auth,
             startPhoneMfaSignInRequest,
             RecaptchaActionName.MFA_SIGNIN,
-            startSignInPhoneMfa,
-            RecaptchaProvider.PHONE_PROVIDER,
+            startSignInPhoneMfaActionCallback,
+            RecaptchaProvider.PHONE_PROVIDER
           );
 
         const response = await startSignInPhoneMfaResponse.catch(error => {
@@ -314,19 +369,50 @@ export async function _verifyPhoneNumber(
       console.log('verifyPhoneNumber - sendPhoneVerificationCode action');
       const sendPhoneVerificationCodeRequest: SendPhoneVerificationCodeRequest =
         {
-          phoneNumber: phoneInfoOptions.phoneNumber,
-          recaptchaToken: recaptchaV2Token
+          phoneNumber: phoneInfoOptions.phoneNumber
         };
+
+      const sendPhoneVerificationCodeActionCallback: PhoneApiCaller<
+        SendPhoneVerificationCodeRequest,
+        SendPhoneVerificationCodeResponse
+      > = async (
+        authParam: AuthInternal,
+        requestParam: SendPhoneVerificationCodeRequest
+      ) => {
+        // If rCE token is empty or "NO_RECAPTCHA", fetch v2 token and inject into request
+        if (
+          !requestParam.captchaResponse ||
+          requestParam.captchaResponse.length === 0 ||
+          requestParam.captchaResponse === FAKE_TOKEN
+        ) {
+          _assert(
+            verifier?.type === RECAPTCHA_VERIFIER_TYPE,
+            authParam,
+            AuthErrorCode.ARGUMENT_ERROR
+          );
+
+          const requestWithRecaptchaV2 = await injectRecaptchaV2Token(
+            authParam,
+            requestParam,
+            RecaptchaActionName.SEND_VERIFICATION_CODE,
+            verifier
+          );
+          return sendPhoneVerificationCode(authParam, requestWithRecaptchaV2);
+        }
+
+        return sendPhoneVerificationCode(authParam, requestParam);
+      };
+
       const sendPhoneVerificationCodeResponse: Promise<SendPhoneVerificationCodeResponse> =
         handleRecaptchaFlow(
           auth,
           sendPhoneVerificationCodeRequest,
           RecaptchaActionName.SEND_VERIFICATION_CODE,
-          sendPhoneVerificationCode,
-          RecaptchaProvider.PHONE_PROVIDER,
+          sendPhoneVerificationCodeActionCallback,
+          RecaptchaProvider.PHONE_PROVIDER
         );
 
-      const response = await sendPhoneVerificationCodeResponse.catch(error => {
+        const response = await sendPhoneVerificationCodeResponse.catch(error => {
         return Promise.reject(error);
       });
 
@@ -335,6 +421,79 @@ export async function _verifyPhoneNumber(
   } finally {
     verifier?._reset();
   }
+}
+
+async function injectRecaptchaV2Token<T>(
+  auth: AuthInternal,
+  request: T,
+  action: RecaptchaActionName,
+  recaptchaV2Verifier: ApplicationVerifierInternal
+): Promise<T> {
+  _assert(
+    recaptchaV2Verifier.type === RECAPTCHA_VERIFIER_TYPE,
+    auth,
+    AuthErrorCode.ARGUMENT_ERROR
+  );
+
+  const recaptchaV2Token = await recaptchaV2Verifier.verify();
+
+  _assert(
+    typeof recaptchaV2Token === 'string',
+    auth,
+    AuthErrorCode.ARGUMENT_ERROR
+  );
+
+  const newRequest = { ...request };
+  if (
+    action === RecaptchaActionName.MFA_ENROLLMENT ||
+    action === RecaptchaActionName.MFA_SIGNIN
+  ) {
+    if ('phoneEnrollmentInfo' in newRequest) {
+      const phoneNumber = (
+        newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      ).phoneEnrollmentInfo.phoneNumber;
+      const captchaResponse = (
+        newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      ).phoneEnrollmentInfo.captchaResponse;
+      const clientType = (
+        newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      ).phoneEnrollmentInfo.clientType;
+      const recaptchaVersion = (
+        newRequest as unknown as StartPhoneMfaEnrollmentRequest
+      ).phoneEnrollmentInfo.recaptchaVersion;
+
+      Object.assign(newRequest, {
+        'phoneEnrollmentInfo': {
+          phoneNumber,
+          recaptchaToken: recaptchaV2Token,
+          captchaResponse,
+          clientType,
+          recaptchaVersion
+        }
+      });
+    } else if ('phoneSignInInfo' in newRequest) {
+      const captchaResponse = (
+        newRequest as unknown as StartPhoneMfaSignInRequest
+      ).phoneSignInInfo.captchaResponse;
+      const clientType = (newRequest as unknown as StartPhoneMfaSignInRequest)
+        .phoneSignInInfo.clientType;
+      const recaptchaVersion = (
+        newRequest as unknown as StartPhoneMfaSignInRequest
+      ).phoneSignInInfo.recaptchaVersion;
+
+      Object.assign(newRequest, {
+        'phoneSignInInfo': {
+          recaptchaToken: recaptchaV2Token,
+          captchaResponse,
+          clientType,
+          recaptchaVersion
+        }
+      });
+    }
+    return newRequest;
+  }
+  Object.assign(newRequest, { 'recaptchaToken': recaptchaV2Token });
+  return newRequest;
 }
 
 /**

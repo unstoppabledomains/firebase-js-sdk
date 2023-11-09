@@ -231,7 +231,8 @@ export async function injectRecaptchaFields<T>(
 
 type ActionMethod<TRequest, TResponse> = (
   auth: AuthInternal,
-  request: TRequest
+  request: TRequest,
+  v2Verifier?: ApplicationVerifierInternal
 ) => Promise<TResponse>;
 
 export async function handleRecaptchaFlow<TRequest, TResponse>(
@@ -312,14 +313,15 @@ export async function handleRecaptchaFlow<TRequest, TResponse>(
                 'handleRecaptchaFlow - missing rCE token or invalid app cred errors'
               );
               // fallback to recaptcha v2
-              const requestWithRecaptchaV2 = await injectRecaptchaFields(
+              const requestWithRecaptchaFields = await injectRecaptchaFields(
                 authInstance,
                 request,
                 actionName,
                 false,
                 true // fakeToken
               );
-              return actionMethod(authInstance, requestWithRecaptchaV2);
+              // This will call the PhoneApiCaller to fetch and inject v2 token.
+              return actionMethod(authInstance, requestWithRecaptchaFields);
             }
           }
           console.log('handleRecaptchaFlow - not AUDIT error out');
@@ -329,14 +331,15 @@ export async function handleRecaptchaFlow<TRequest, TResponse>(
     } else {
       console.log('handleRecaptchaFlow - phone not enable. Do rcv2 flow.');
       // recaptcha v2
-      const requestWithRecaptchaV2 = await injectRecaptchaFields(
+      const requestWithRecaptchaFields = await injectRecaptchaFields(
         authInstance,
         request,
         actionName,
         false,
         true // fakeToken
       );
-      return actionMethod(authInstance, requestWithRecaptchaV2);
+      // This will call the PhoneApiCaller to fetch and inject v2 token.
+      return actionMethod(authInstance, requestWithRecaptchaFields);
     }
   } else {
     console.log('handleRecaptchaFlow - neither EMAIL or PHONE provider');
