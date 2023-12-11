@@ -1,6 +1,6 @@
 {
-  "name": "@firebase/auth",
-  "version": "1.5.1",
+  "name": "@unstoppabledomains/firebase-auth",
+  "version": "1.5.3",
   "description": "The Firebase Authenticaton component of the Firebase JS SDK.",
   "author": "Firebase <firebase-support@google.com> (https://firebase.google.com/)",
   "main": "dist/node/index.js",
@@ -12,7 +12,7 @@
   "esm5": "dist/esm5/index.js",
   "exports": {
     ".": {
-      "types": "./dist/auth-public.d.ts",
+      "types": "./dist/firebase-auth-public.d.ts",
       "node": {
         "types": "./dist/node/index.d.ts",
         "import": "./dist/node-esm/index.js",
@@ -74,7 +74,7 @@
     "lint": "eslint -c .eslintrc.js '**/*.ts' --ignore-path '../../.gitignore'",
     "lint:fix": "eslint --fix -c .eslintrc.js '**/*.ts' --ignore-path '../../.gitignore'",
     "build": "rollup -c && yarn api-report",
-    "build:deps": "lerna run --scope @firebase/auth --include-dependencies build",
+    "build:deps": "lerna run --scope @unstoppabledomains/firebase-auth --include-dependencies build",
     "build:release": "yarn build && yarn typings:public",
     "build:scripts": "tsc -moduleResolution node --module commonjs scripts/*.ts && ls scripts/*.js | xargs -I % sh -c 'terser %  -o %'",
     "dev": "rollup -c -w",
@@ -100,7 +100,7 @@
     "api-report": "api-extractor run --local --verbose",
     "doc": "api-documenter markdown --input temp --output docs",
     "build:doc": "yarn build && yarn doc",
-    "typings:public": "node ../../scripts/build/use_typings.js ./dist/auth-public.d.ts"
+    "typings:public": "node ../../scripts/build/use_typings.js ./dist/firebase-auth-public.d.ts"
   },
   "peerDependencies": {
     "@firebase/app": "0.x",
@@ -140,11 +140,15 @@
   "bugs": {
     "url": "https://github.com/firebase/firebase-js-sdk/issues"
   },
-  "typings": "dist/auth.d.ts",
+  "typings": "dist/firebase-auth.d.ts",
   "nyc": {
     "extension": [
       ".ts"
     ],
     "reportDir": "./coverage/node"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }
