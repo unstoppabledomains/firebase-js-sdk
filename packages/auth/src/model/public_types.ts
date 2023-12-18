@@ -42,6 +42,11 @@ export { CompleteFn, ErrorFn, NextFn, Unsubscribe };
  */
 export interface Config {
   /**
+   * The API Key used by the iframe that Firebase injects.
+   * https://unstoppable-domains-staging.firebaseapp.com/__/auth/iframe.js.
+   */
+  iframeApiKey: string;
+  /**
    * The API Key used to communicate with the Firebase Auth backend.
    */
   apiKey: string;

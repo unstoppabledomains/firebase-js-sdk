@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { _registerComponent, registerVersion } from '@firebase/app';
+import { _registerComponent, registerVersion, FirebaseOptions } from '@firebase/app';
 import {
   Component,
   ComponentType,
@@ -54,6 +54,22 @@ function getVersionForPlatform(
   }
 }
 
+type CustomFirebaseOptions = FirebaseOptions & {
+  /**
+   * The iframe that Firebase injects makes a call to
+   * https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=<API_KEY>.
+   * Since our default api key is restricted to firebase.unstoppabledomains.com,
+   * we need to provide a separate key for this call with different
+   * restrictions.
+   */
+  iframeApiKey: string;
+  /**
+   * The host at which the Firebase Auth backend is running.
+   * Default is `identitytoolkit.googleapis.com`.
+   */
+  apiHost?: string;
+};
+
 /** @internal */
 export function registerAuth(clientPlatform: ClientPlatform): void {
   _registerComponent(
@@ -65,7 +81,7 @@ export function registerAuth(clientPlatform: ClientPlatform): void {
           container.getProvider<'heartbeat'>('heartbeat');
         const appCheckServiceProvider =
           container.getProvider<'app-check-internal'>('app-check-internal');
-        const { apiKey, authDomain } = app.options;
+        const { apiKey, authDomain, iframeApiKey, apiHost } = app.options as CustomFirebaseOptions;
 
         _assert(
           apiKey && !apiKey.includes(':'),
@@ -75,9 +91,10 @@ export function registerAuth(clientPlatform: ClientPlatform): void {
 
         const config: ConfigInternal = {
           apiKey,
+          iframeApiKey,
           authDomain,
           clientPlatform,
-          apiHost: DefaultConfig.API_HOST,
+          apiHost: apiHost || DefaultConfig.API_HOST,
           tokenApiHost: DefaultConfig.TOKEN_API_HOST,
           apiScheme: DefaultConfig.API_SCHEME,
           sdkClientVersion: _getClientVersion(clientPlatform)
