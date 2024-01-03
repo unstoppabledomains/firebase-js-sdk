@@ -58,7 +58,7 @@ function getIframeUrl(auth: AuthInternal): string {
     : `https://${auth.config.authDomain}/${IFRAME_PATH}`;
 
   const params: Record<string, string> = {
-    apiKey: config.iframeApiKey,
+    apiKey: config.scriptApiKey,
     appName: auth.name,
     v: SDK_VERSION
   };

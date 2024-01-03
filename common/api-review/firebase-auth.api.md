@@ -275,7 +275,7 @@ export interface Config {
     apiKey: string;
     apiScheme: string;
     authDomain?: string;
-    iframeApiKey: string;
+    scriptApiKey: string;
     sdkClientVersion: string;
     tokenApiHost: string;
 }

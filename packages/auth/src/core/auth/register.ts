@@ -56,16 +56,18 @@ function getVersionForPlatform(
 
 type CustomFirebaseOptions = FirebaseOptions & {
   /**
-   * The iframe that Firebase injects makes a call to
+   * The API key sent to any script loaded by the SDK. (e.g., iframe that
+   * Firebase injects, popup that shows up when you try to login with google)
+   * Example: The iframe that Firebase injects makes a call to
    * https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=<API_KEY>.
    * Since our default api key is restricted to firebase.unstoppabledomains.com,
    * we need to provide a separate key for this call with different
    * restrictions.
    */
-  iframeApiKey: string;
+  scriptApiKey: string;
   /**
-   * The host at which the Firebase Auth backend is running.
-   * Default is `identitytoolkit.googleapis.com`.
+   * The host at which the Firebase Auth backend is running.  Default is
+   * `identitytoolkit.googleapis.com`.
    */
   apiHost?: string;
 };
@@ -81,7 +83,7 @@ export function registerAuth(clientPlatform: ClientPlatform): void {
           container.getProvider<'heartbeat'>('heartbeat');
         const appCheckServiceProvider =
           container.getProvider<'app-check-internal'>('app-check-internal');
-        const { apiKey, authDomain, iframeApiKey, apiHost } = app.options as CustomFirebaseOptions;
+        const { apiKey, authDomain, scriptApiKey, apiHost } = app.options as CustomFirebaseOptions;
 
         _assert(
           apiKey && !apiKey.includes(':'),
@@ -91,7 +93,7 @@ export function registerAuth(clientPlatform: ClientPlatform): void {
 
         const config: ConfigInternal = {
           apiKey,
-          iframeApiKey,
+          scriptApiKey,
           authDomain,
           clientPlatform,
           apiHost: apiHost || DefaultConfig.API_HOST,
