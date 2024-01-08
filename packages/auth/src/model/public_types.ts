@@ -42,16 +42,6 @@ export { CompleteFn, ErrorFn, NextFn, Unsubscribe };
  */
 export interface Config {
   /**
-   * The API key sent to any script loaded by the SDK. (e.g., iframe that
-   * Firebase injects, popup that shows up when you try to login with google)
-   * Example: The iframe that Firebase injects makes a call to
-   * https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=<API_KEY>.
-   * Since our default api key is restricted to firebase.unstoppabledomains.com,
-   * we need to provide a separate key for this call with different
-   * restrictions.
-   */
-  scriptApiKey: string;
-  /**
    * The API Key used to communicate with the Firebase Auth backend.
    */
   apiKey: string;

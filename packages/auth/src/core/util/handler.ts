@@ -70,10 +70,10 @@ export async function _getRedirectUrl(
   additionalParams?: Record<string, string>
 ): Promise<string> {
   _assert(auth.config.authDomain, auth, AuthErrorCode.MISSING_AUTH_DOMAIN);
-  _assert(auth.config.scriptApiKey, auth, AuthErrorCode.INVALID_API_KEY);
+  _assert(auth.config.apiKey, auth, AuthErrorCode.INVALID_API_KEY);
 
   const params: WidgetParams = {
-    apiKey: auth.config.scriptApiKey,
+    apiKey: auth.config.apiKey,
     appName: auth.name,
     authType,
     redirectUrl,
@@ -129,7 +129,9 @@ export async function _getRedirectUrl(
 
 function getHandlerBase({ config }: AuthInternal): string {
   if (!config.emulator) {
-    return `https://${config.authDomain}/${WIDGET_PATH}`;
+    const protocol = config.authDomain?.includes('localhost') ? 'http' : 'https';
+
+    return `${protocol}://${config.authDomain}/${WIDGET_PATH}`;
   }
 
   return _emulatorUrl(config, EMULATOR_WIDGET_PATH);
