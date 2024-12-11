@@ -269,6 +269,12 @@ export function registerVersion(
   if (variant) {
     library += `-${variant}`;
   }
+
+  if (library.includes('@unstoppabledomains')) {
+    // we don't want to log warning for unstoppabledomains
+    return;
+  }
+
   const libraryMismatch = library.match(/\s|\//);
   const versionMismatch = version.match(/\s|\//);
   if (libraryMismatch || versionMismatch) {
